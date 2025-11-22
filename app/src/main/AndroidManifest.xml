@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.kero.anghamiplus">
+
+    <!-- Optional: Recommended -->
+    <uses-sdk android:minSdkVersion="24" />
+
+    <application
+        android:allowBackup="true"
+        android:extractNativeLibs="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="AnghamiPlus">
+
+        <!-- Required by Xposed -->
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+
+        <meta-data
+            android:name="xposeddescription"
+            android:value="Anghami Plus - تفعيل المزايا المميزة" />
+
+        <meta-data
+            android:name="xposedminversion"
+            android:value="82" />
+
+        <!-- LSPosed Scope Linking -->
+        <meta-data
+            android:name="xposedscope"
+            android:resource="@array/xposed_scope" />
+
+        <meta-data
+            android:name="xposedscopeName"
+            android:resource="@array/xposed_scope_title" />
+
+    </application>
+
+</manifest>

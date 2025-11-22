@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LSPosed: Recommended app to hook -->
+    <string-array name="xposed_scope">
+        <item>com.anghami</item>
+    </string-array>
+    
+    <!-- Optional: App name for display -->
+    <string-array name="xposed_scope_title" translatable="false">
+        <item>Anghami</item>
+    </string-array>
+</resources>

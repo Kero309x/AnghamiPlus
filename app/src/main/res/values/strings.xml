@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AnghamiPlus</string>
+    <string name="module_description">تفعيل المزايا المميزة في Anghami</string>
+    
+    <!-- Material UI Strings -->
+    <string name="action_refresh">تحديث</string>
+    <string name="action_settings">الإعدادات</string>
+    <string name="module_status">حالة الموديول</string>
+    <string name="app_version">إصدار التطبيق</string>
+    <string name="features_title">الميزات</string>
+    <string name="restart_required">يلزم إعادة التشغيل</string>
+    <string name="about_dialog_title">حول التطبيق</string>
+    <string name="ok_button">موافق</string>
+    <string name="cancel_button">إلغاء</string>
+    <string name="restart_app">إعادة التشغيل</string>
+    <string name="refresh">تحديث</string>
+</resources>

@@ -13,9 +13,10 @@ public final class NetworkBlockHooks implements HookSection {
 
     @Override
     public String getSectionName() {
-        return "Network Blocker";
+        return "Enhanced Network Blocker";
     }
 
+    // 🔥 كل المسارات الأساسية للإعلانات
     private static final String[] BLOCKED_PATTERNS = {
             "GETadpriorities.view",
             "GETads.view",
@@ -23,26 +24,62 @@ public final class NetworkBlockHooks implements HookSection {
             "GETsubscribeSheet.view",
             "GETsubscribe.view",
             "REGISTERad.view",
+            "/get-ad-in-player",
+            "GETDisplayAds.view",
+            "GETad.view",
+            "bls.view",
+            "displayAds",
+            "adscontent",
+
+            // Google / Doubleclick
             "pubads.g.doubleclick.net",
-            "googleads.g.doubleclick.net"
+            "googleads.g.doubleclick.net",
+            "pagead2.googlesyndication.com",
+
+            // Anghami Ads CDN
+            "anghnewads.anghcdn.co",
+            "ads.anghcdn.co",
+
+            // 3rd party ad networks
+            "taboola",
+            "adcolony",
+            "unityads",
+            "facebook.com/tr",
+            "app-measurement.com",
+            "analytics",
+    };
+
+    // 🔥 قائمة كلمات محجوبة (Dynamic Match)
+    private static final String[] KEYWORDS = {
+            "/ad",
+            "/ads",
+            "adserver",
+            "adclick",
+            "adunit",
+            "adcontent",
+            "advert",
+            "tracking",
+            "impression",
+            "viewability",
+            "sponsored",
+            "campaign",
     };
 
     @Override
     public boolean install(XC_LoadPackage.LoadPackageParam lp) {
 
-        Logger.i("  ┌─ Installing Network Blocker…");
+        Logger.i("  ┌─ Installing Enhanced Network Blocker…");
 
-        // Primary OkHttp builder class
-        Class<?> builder = ClassUtils.findClassSafely("okhttp3.Request$Builder", lp.classLoader);
+        Class<?> builderClass = ClassUtils.findClassSafely("okhttp3.Request$Builder", lp.classLoader);
 
-        if (builder == null) {
-            Logger.i("  │   ⚠️ Request.Builder not found — trying alternatives…");
+        if (builderClass == null) {
+            Logger.i("  │   ⚠️ Request.Builder not found — trying fallback hooks…");
             return tryFallback(lp);
         }
 
-        boolean ok = applyBlockHook(builder);
+        boolean ok = applyBlockHook(builderClass);
 
-        Logger.i("  └─ Network Blocker: " + (ok ? "active" : "no hooks"));
+        Logger.i("  └─ Network Blocker Status: " + (ok ? "ACTIVE" : "FAILED"));
         return ok;
     }
 
@@ -57,9 +94,8 @@ public final class NetworkBlockHooks implements HookSection {
         for (String cls : fallback) {
             Class<?> c = ClassUtils.findClassSafely(cls, lp.classLoader);
             if (c != null) {
-                boolean ok = applyBlockHook(c);
-                if (ok) {
-                    Logger.i("  │   ✓ Hooked via fallback: " + cls);
+                if (applyBlockHook(c)) {
+                    Logger.i("  │   ✓ Fallback Hook Activated: " + cls);
                     return true;
                 }
             }
@@ -68,36 +104,40 @@ public final class NetworkBlockHooks implements HookSection {
     }
 
     private boolean applyBlockHook(Class<?> target) {
+
         try {
+
             XposedHelpers.findAndHookMethod(
                     target,
                     "build",
                     new XC_MethodHook() {
+
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) {
 
                             try {
+
                                 Object builder = param.thisObject;
 
-                                // extract URL
                                 Object httpUrl = XposedHelpers.getObjectField(builder, "url");
                                 if (httpUrl == null) return;
 
                                 String url = httpUrl.toString();
 
-                                // match block rules
-                                if (matches(url)) {
+                                // Full matching
+                                if (shouldBlock(url)) {
 
-                                    // debug only — user will not see it
                                     if (Config.DEBUG_MODE) {
-                                        Logger.d("[BLOCKED] " + url);
+                                        Logger.d("[BLOCKED_URL] " + url);
                                     }
 
-                                    param.setResult(null);  // silently cancel request
+                                    // Cancel the request safely
+                                    param.setResult(null);
+
                                 }
 
                             } catch (Throwable ignore) {
-                                // Never break the app — silent fail
+                                // Never crash the app
                             }
                         }
                     }
@@ -110,10 +150,33 @@ public final class NetworkBlockHooks implements HookSection {
         }
     }
 
-    private boolean matches(String url) {
+    // 🔥 أفضل Matching شامل للإعلانات
+    private boolean shouldBlock(String url) {
+
+        if (url == null) return false;
+
+        url = url.toLowerCase();
+
+        // Basic patterns
         for (String p : BLOCKED_PATTERNS) {
-            if (url.contains(p)) return true;
+            if (url.contains(p.toLowerCase())) {
+                return true;
+            }
         }
+
+        // Dynamic keyword blocking
+        for (String k : KEYWORDS) {
+            if (url.contains(k)) {
+                return true;
+            }
+        }
+
+        // Generic rule:
+        // احظر أي request يبدأ بـ GETad*
+        if (url.contains("GETad".toLowerCase())) {
+            return true;
+        }
+
         return false;
     }
 }

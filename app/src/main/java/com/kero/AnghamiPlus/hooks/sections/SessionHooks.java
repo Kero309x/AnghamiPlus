@@ -4,113 +4,124 @@ import com.kero.anghamiplus.hooks.core.ClassUtils;
 import com.kero.anghamiplus.hooks.core.HookSection;
 import com.kero.anghamiplus.hooks.core.Logger;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 public final class SessionHooks implements HookSection {
 
-    @Override
-    public String getSectionName() {
-        return "Session Spoofer";
-    }
-
+    // إضافة GETlyrics + GETplaylists
     private static final String[] TARGET_ENDPOINTS = {
-            "lyrics",
-            "playlists",
+            "getplaylists.view",
+            "getlyrics.view",
+     "silo.anghami.com",
+        "GETpurchases.view"
+            
     };
 
     @Override
+    public String getSectionName() {
+        return "Session Spoofer (Replace SID for GETplaylists + GETlyrics)";
+    }
+
+    @Override
     public boolean install(XC_LoadPackage.LoadPackageParam lp) {
-        Logger.i("  ┌─ Installing Session Spoofer…");
-
         try {
-            Class<?> builder = ClassUtils.findClassSafely("okhttp3.Request$Builder", lp.classLoader);
+            Class<?> reqClass = ClassUtils.findClassSafely("okhttp3.Request", lp.classLoader);
+            Class<?> httpUrlClass = ClassUtils.findClassSafely("okhttp3.HttpUrl", lp.classLoader);
 
-            if (builder == null) {
-                Logger.i("  └─ ⚠️ OkHttp Builder not found — skipping");
+            if (reqClass == null || httpUrlClass == null) {
+                Logger.i("Missing OkHttp classes — cannot install");
                 return false;
             }
 
             XposedHelpers.findAndHookMethod(
-                    builder,
-                    "build",
+                    reqClass,
+                    "url",
                     new XC_MethodHook() {
-
                         @Override
-                        protected void beforeHookedMethod(MethodHookParam param) {
-
+                        protected void afterHookedMethod(MethodHookParam param) {
                             try {
-                                Object b = param.thisObject;
-                                Object httpUrl = XposedHelpers.getObjectField(b, "url");
-                                if (httpUrl == null) return;
+                                Object httpUrlObj = param.getResult();
+                                if (httpUrlObj == null) return;
 
-                                String url = httpUrl.toString().toLowerCase();
+                                String url = httpUrlObj.toString();
+                                String urlLower = url.toLowerCase();
 
-                                if (!isTarget(url)) return;
+                                // شغل الهوك على GETlyrics و GETplaylists
+                                if (!isTarget(urlLower)) return;
 
-                                String newToken = buildToken();
-                                String newUrl;
+                                Logger.d("🎯 Matched API → rewriting SID : " + urlLower);
 
-                                if (url.contains("sid=")) {
-                                    newUrl = url.replaceAll("sid=[^&]*", "sid=" + newToken);
-                                } else {
-                                    newUrl = url + (url.contains("?") ? "&" : "?") + "sid=" + newToken;
+                                String newSid = buildToken();
+
+                                int q = url.indexOf('?');
+                                String path = q >= 0 ? url.substring(0, q) : url;
+                                String query = q >= 0 ? url.substring(q + 1) : "";
+
+                                if (query.isEmpty()) {
+                                    String newUrl = path + "?sid=" + newSid;
+                                    Object parsed = XposedHelpers.callStaticMethod(httpUrlClass, "parse", newUrl);
+                                    if (parsed != null) param.setResult(parsed);
+                                    return;
                                 }
 
-                                Object parsed = XposedHelpers.callStaticMethod(
-                                        httpUrl.getClass(),
-                                        "parse",
-                                        newUrl
-                                );
+                                String[] parts = query.split("&");
+                                List<String> kept = new ArrayList<>(parts.length);
 
-                                if (parsed != null) {
-                                    XposedHelpers.setObjectField(b, "url", parsed);
+                                for (String p : parts) {
+                                    if (p == null || p.isEmpty()) continue;
+                                    int eq = p.indexOf('=');
+                                    String name = eq > -1 ? p.substring(0, eq) : p;
+
+                                    if (name.equalsIgnoreCase("sid")) continue;
+                                    kept.add(p);
                                 }
 
-                                // silent logging 5%
-                                if (Math.random() > 0.95) {
-                                    Logger.d("Session spoofed → " + getBase(url));
+                                StringBuilder sb = new StringBuilder();
+                                for (int i = 0; i < kept.size(); i++) {
+                                    if (i > 0) sb.append('&');
+                                    sb.append(kept.get(i));
                                 }
 
-                            } catch (Throwable ignore) {
-                                // Silent — no crash
+                                if (sb.length() > 0) sb.append('&');
+                                sb.append("sid=").append(newSid);
+
+                                String newUrl = path + "?" + sb.toString();
+
+                                Object parsed = XposedHelpers.callStaticMethod(httpUrlClass, "parse", newUrl);
+                                if (parsed != null) param.setResult(parsed);
+
+                                Logger.d("✔ SID replaced successfully for → " + getBase(newUrl));
+
+                            } catch (Throwable t) {
+                                Logger.e("Session rewrite error", t);
                             }
                         }
                     }
             );
 
-            Logger.i("  └─ ✓ Session Spoofer installed");
+            Logger.i("✓ Session Spoofer for GETplaylists + GETlyrics installed");
             return true;
 
         } catch (Throwable e) {
-            Logger.e("  └─ Session hook failed", e);
+            Logger.e("Failed to install Session Spoofer", e);
             return false;
         }
     }
 
-    private boolean isTarget(String url) {
+    private boolean isTarget(String urlLower) {
         for (String e : TARGET_ENDPOINTS) {
-            if (url.contains(e)) return true;
+            if (urlLower.contains(e)) return true;
         }
         return false;
     }
 
     private String buildToken() {
-        // safer dynamic static-like token
-        return "i7%3A"
-                + "kicclhkf%3A"
-                + "3754o6253o81q76o%3A"
-                + "ecehdddldiegfk%3A"
-                + "RT%3A"
-                + "gcel%3A"
-                + "ra%3A"
-                + "n8.0.2%3A"
-                + "180%3A%3A"
-                + "n8.0.2%3A"
-                + "0%3A"
-                + "na%3A"
-                + "523r4191s4";
+        return "i7%3Akicclhkf%3A3nqqn2664963oq4s%3Aecehddejdjcfhi%3ART%3Agcel%3Ara%3An8.0.2%3A182%3A%3An8.0.2%3A0%3Ana%3Aq2r7119pq3";
     }
 
     private String getBase(String url) {

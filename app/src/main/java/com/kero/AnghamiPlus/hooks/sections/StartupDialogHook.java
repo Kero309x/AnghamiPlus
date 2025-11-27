@@ -2,6 +2,7 @@ package com.kero.anghamiplus.hooks.sections;
 
 import android.app.Activity;
 import android.app.Dialog;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
@@ -9,6 +10,7 @@ import android.os.Looper;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -45,9 +47,15 @@ public class StartupDialogHook implements HookSection {
 
                             Activity act = (Activity) param.thisObject;
 
+                            SharedPreferences prefs = act.getSharedPreferences("kero_hooks", Activity.MODE_PRIVATE);
+                            boolean shown = prefs.getBoolean("startup_dialog_shown", false);
+                            if (shown) return;
+
+                            prefs.edit().putBoolean("startup_dialog_shown", true).apply();
+
                             new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                                showDialog(act);
-                            }, 1200);
+                                safeShowDialog(act);
+                            }, 1500);
                         }
                     }
             );
@@ -62,23 +70,43 @@ public class StartupDialogHook implements HookSection {
     }
 
     //=====================================================
-    // CUSTOM UI DIALOG
+    // FIXED SAFE DIALOG SHOW
+    //=====================================================
+    private void safeShowDialog(Activity act) {
+
+        // 1) Activity not valid
+        if (act == null) return;
+        if (act.isFinishing()) return;
+        if (act.isDestroyed()) return;
+
+        // 2) window not ready yet → wait for UI to attach
+        ViewGroup decor = (ViewGroup) act.getWindow().getDecorView();
+        decor.post(() -> {
+
+            if (act.isFinishing() || act.isDestroyed()) return;
+
+            try {
+                showDialog(act);
+            } catch (Throwable e) {
+                Logger.e("Dialog Failed (Window not ready)", e);
+            }
+        });
+    }
+
+    //=====================================================
+    // DIALOG UI
     //=====================================================
     private void showDialog(Activity act) {
 
         Dialog dialog = new Dialog(act);
-        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setCancelable(false);
         dialog.setCanceledOnTouchOutside(false);
 
-        // Disable BACK button
         dialog.setOnKeyListener((d, keyCode, event) ->
                 keyCode == KeyEvent.KEYCODE_BACK
         );
 
-        //==============================
-        // ROOT LAYOUT
-        //==============================
         LinearLayout root = new LinearLayout(act);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(65, 65, 65, 65);
@@ -90,9 +118,6 @@ public class StartupDialogHook implements HookSection {
         bg.setStroke(3, Color.parseColor("#7B43FF"));
         root.setBackground(bg);
 
-        //==============================
-        // TITLE
-        //==============================
         TextView title = new TextView(act);
         title.setText("🎵 AnghamiPlus Activated");
         title.setTextColor(Color.WHITE);
@@ -101,9 +126,6 @@ public class StartupDialogHook implements HookSection {
         title.setPadding(0, 0, 0, 25);
         root.addView(title);
 
-        //==============================
-        // SUBTITLE
-        //==============================
         TextView sub = new TextView(act);
         sub.setText("Your premium features are now enabled.");
         sub.setTextColor(Color.parseColor("#CCCCCC"));
@@ -112,18 +134,12 @@ public class StartupDialogHook implements HookSection {
         sub.setPadding(0, 0, 0, 35);
         root.addView(sub);
 
-        //==============================
-        // FEATURES LIST
-        //==============================
         addFeature(act, root, "✔ Ads Completely Removed");
         addFeature(act, root, "✔ Unlimited Skips Enabled");
         addFeature(act, root, "✔ Gold Profile Unlocked");
         addFeature(act, root, "✔ Unlimited Downloads");
         addFeature(act, root, "✔ Queue Restrictions Disabled");
 
-        //==============================
-        // JOIN TELEGRAM BUTTON
-        //==============================
         Button join = new Button(act);
         join.setText("Join Telegram");
         join.setPadding(25, 12, 25, 12);
@@ -140,9 +156,6 @@ public class StartupDialogHook implements HookSection {
             act.startActivity(i);
         });
 
-        //==============================
-        // OK BUTTON – 30 sec timer
-        //==============================
         Button ok = new Button(act);
         ok.setText("OK (30s)");
         ok.setEnabled(false);
@@ -158,20 +171,19 @@ public class StartupDialogHook implements HookSection {
 
         dialog.setContentView(root);
 
-        dialog.getWindow().setGravity(Gravity.CENTER);
-        dialog.getWindow().setLayout(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        );
-        dialog.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setGravity(Gravity.CENTER);
+            window.setLayout(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        }
 
         dialog.show();
 
-        //================================================
-        // COUNTDOWN TIMER
-        //================================================
         final int[] seconds = {30};
-
         Handler timerHandler = new Handler(Looper.getMainLooper());
 
         Runnable timerRunnable = new Runnable() {
@@ -192,9 +204,6 @@ public class StartupDialogHook implements HookSection {
         timerHandler.post(timerRunnable);
     }
 
-    //=====================================================
-    // ADD FEATURE LINE
-    //=====================================================
     private void addFeature(Activity act, LinearLayout root, String text) {
         TextView f = new TextView(act);
         f.setText(text);
